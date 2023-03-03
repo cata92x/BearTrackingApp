@@ -2,11 +2,17 @@ package com.finaldegree.beartrackingapp;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 
 import android.Manifest;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.View;
@@ -37,8 +43,16 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         checkPermission();
-    }
 
+        Button button = findViewById(R.id.button);
+//        button.setOnClickListener(new View.OnClickListener() {
+//            @Override
+//            public void onClick(View view) {
+//
+//
+//            }
+//        }
+    }
     private void checkPermission() {
         Dexter.withContext(this).withPermission(Manifest.permission.ACCESS_FINE_LOCATION).withListener(new PermissionListener() {
             @Override
@@ -75,7 +89,7 @@ public class MainActivity extends AppCompatActivity {
                 });
 
 
-                AlertDialog alertDialog  = builder.create();
+                AlertDialog alertDialog = builder.create();
                 alertDialog.show();
             }
 
@@ -85,5 +99,4 @@ public class MainActivity extends AppCompatActivity {
             }
         }).check();
     }
-
 }

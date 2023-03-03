@@ -15,6 +15,11 @@ public class Bear {
         this.lastUpdate = lastUpdate;
     }
 
+    public Bear(double latitude, double longitude) {
+        this.latitude = latitude;
+        this.longitude = longitude;
+    }
+
     public int getCode() {
         return code;
     }

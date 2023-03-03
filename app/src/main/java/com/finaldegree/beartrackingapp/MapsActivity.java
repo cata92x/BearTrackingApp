@@ -1,19 +1,29 @@
 package com.finaldegree.beartrackingapp;
 
+import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.fragment.app.FragmentActivity;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
@@ -29,8 +39,11 @@ import com.google.android.gms.maps.model.Circle;
 import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.finaldegree.beartrackingapp.databinding.ActivityMapsBinding;
-import com.google.android.gms.maps.model.Marker;
-import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -55,13 +68,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private ActivityMapsBinding binding;
     private GoogleMap mMap;
 
+    FirebaseDatabase database;
+
     private List<Bear> bears;
     private Handler handler;
     private Runnable runnable;
     private Boolean bearReported;
-    int delayRefresh = 10000;
+    private List<LatLng> reportedSighting;
+    int delayRefresh = 2000;
     int delayDelete = 10000;
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -74,15 +89,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
             public boolean onQueryTextSubmit(String s) {
-                // on below line we are getting the
-                // location name from search view.
                 String location = searchView.getQuery().toString();
-
-                // below line is to create a list of address
-                // where we will store the list of all address.
                 List<Address> addressList = null;
-
-                // checking if the entered location is null or not.
                 if (location != null || location.equals("")) {
                     Geocoder geocoder = new Geocoder(MapsActivity.this);
                     try {
@@ -110,6 +118,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         handler = new Handler();
         bears = new ArrayList<>();
+        reportedSighting = new ArrayList<>();
 
         ImageButton imageButton = findViewById(R.id.button_Alert);
         imageButton.setOnClickListener(new View.OnClickListener() {
@@ -129,9 +138,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         bearReported = false;
 
+        database = FirebaseDatabase.getInstance("https://beartrackingapp-9f7a3-default-rtdb.europe-west1.firebasedatabase.app/");
         mapFragment.getMapAsync(this);
     }
-
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
@@ -152,8 +161,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         handler.postDelayed(runnable = new Runnable() {
             public void run() {
                 handler.postDelayed(runnable, delayRefresh);
-                Toast.makeText(MapsActivity.this, "called every 10 seconds", Toast.LENGTH_SHORT).show();
-                retriveBearCoordinates();
+                retrieveUsersSighting();
+                retrieveBearCoordinates();
             }
         }, delayRefresh);
         super.onResume();
@@ -165,8 +174,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         super.onPause();
     }
 
-
-    private void retriveBearCoordinates() {
+    private void retrieveBearCoordinates() {
         Executor executor = Executors.newSingleThreadExecutor();
         Handler handler = new Handler(Looper.myLooper());
 
@@ -185,7 +193,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         executor.execute(() -> {
             try {
-                URL serverURL = new URL("http://192.168.0.87:3000/bears");
+                URL serverURL = new URL("http://192.168.0.31:3000/bears");
                 HttpURLConnection httpURLConnection = (HttpURLConnection) serverURL.openConnection();
                 InputStream inputStream = httpURLConnection.getInputStream();
                 BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
@@ -205,10 +213,12 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     Bear bear = new Bear(
                             bearJSONObject.getInt("code"),
                             bearJSONObject.getDouble("latitude"),
-                            bearJSONObject.getDouble("longitude"),
-                            date);
+                            bearJSONObject.getDouble("longitude"), date);
 
                     Boolean shouldAdd = true;
+                    if (bears.contains(bear)) {
+
+                    }
                     for (Bear bearIndex : bears) {
                         if (bearIndex.getCode() == bear.getCode()) {
                             bears.set(bears.indexOf(bearIndex), bear);
@@ -238,8 +248,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
                             // Do something with the distance
                             Toast.makeText(MapsActivity.this, "Distance:" + distance[0], Toast.LENGTH_SHORT).show();
-                            if (distance[0] < 100) {
-                                Toast.makeText(MapsActivity.this, "ALERT!", Toast.LENGTH_SHORT).show();
+                            if (distance[0] < 200) {
+//                                Toast.makeText(MapsActivity.this, "ALERT!", Toast.LENGTH_SHORT).show();
                             }
 
                             // Remove the circle after x minutes
@@ -264,30 +274,82 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         });
     }
 
+    private void retrieveUsersSighting() {
+        DatabaseReference bearsRef = database.getReference("bears");
+
+        bearsRef.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                for (DataSnapshot bearSnapshot : dataSnapshot.getChildren()) {
+                    Double latitude = bearSnapshot.child("latitude").getValue(Double.class);
+                    Double longitude = bearSnapshot.child("longitude").getValue(Double.class);
+
+                    LatLng latLng = new LatLng(latitude, longitude);
+
+                    if (!reportedSighting.contains(latLng)) {
+                        Circle circle = mMap.addCircle(new CircleOptions()
+                                .fillColor(Color.argb(50, 255, 0, 0))
+                                .radius(20)
+                                .center(latLng)
+                                .strokeWidth(2)
+                                .strokeColor(Color.rgb(255, 0, 0)));
+                        reportedSighting.add(latLng);
+                        new Handler().postDelayed(new Runnable() {
+                            @Override
+                            public void run() {
+                                circle.remove();
+                                reportedSighting.remove(latLng);
+                            }
+                        }, delayDelete);
+                    }
+                }
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+            }
+        });
+    }
+
     private void reportBear(View view) {
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
         } else {
             if (!bearReported) {
-                LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-                Location userLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-                if (userLocation != null) {
-                    LatLng latLng = new LatLng(userLocation.getLatitude(), userLocation.getLongitude());
-                    Marker marker = mMap.addMarker(new MarkerOptions().position(latLng).title("Bear spotted here"));
-                    new Handler().postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            marker.remove();
-                            bearReported = false;
-                        }
-                    }, delayDelete);
-                } else {
-                    Toast.makeText(this, "Unable to get current location", Toast.LENGTH_SHORT).show();
-                }
-                bearReported = true;
+                LocationManager locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+                String locationProvider = LocationManager.NETWORK_PROVIDER;
+                @SuppressLint("MissingPermission") android.location.Location lastKnownLocation = locationManager.getLastKnownLocation(locationProvider);
+                double userLat = lastKnownLocation.getLatitude();
+                double userLong = lastKnownLocation.getLongitude();
+
+                LatLng latLng = new LatLng(userLat, userLong);
+                Circle circle = mMap.addCircle(new CircleOptions()
+                        .fillColor(Color.argb(50, 255, 0, 0))
+                        .radius(20)
+                        .center(latLng)
+                        .strokeWidth(2)
+                        .strokeColor(Color.rgb(255, 0, 0)));
+
+                reportedSighting.add(latLng);
+//                 Firebase code to post LatLng
+                DatabaseReference bearRef = database.getReference().child("bears").push();
+                bearRef.child("latitude").setValue(latLng.latitude);
+                bearRef.child("longitude").setValue(latLng.longitude);
+//                bearRef.child("reportDate").setValue(Calendar.getInstance().getTime());
+
+                new Handler().postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        circle.remove();
+                        bearReported = false;
+                        bearRef.removeValue();
+                        reportedSighting.remove(latLng);
+                    }
+                }, delayDelete);
             } else {
                 Toast.makeText(this, "You have to wait before you can report another bear", Toast.LENGTH_SHORT).show();
             }
+            bearReported = true;
         }
     }
 }
