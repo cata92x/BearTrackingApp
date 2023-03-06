@@ -1,6 +1,4 @@
 <resources>
     <string name="app_name">BearTrackingApp</string>
     <string name="title_activity_maps">MapsActivity</string>
-    <string name="channel_name">My Notification Channel</string>
-    <string name="channel_description">This is my notification channel</string>
 </resources>

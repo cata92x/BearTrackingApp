@@ -1,17 +1,15 @@
 package com.finaldegree.beartrackingapp;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
 import androidx.fragment.app.FragmentActivity;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
+import android.app.ActivityManager;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -19,11 +17,12 @@ import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
+import android.provider.Settings;
 import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
@@ -74,9 +73,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private Handler handler;
     private Runnable runnable;
     private Boolean bearReported;
+    private Boolean alerted;
     private List<LatLng> reportedSighting;
-    int delayRefresh = 2000;
-    int delayDelete = 10000;
+    int delayRefresh = 5000;
+    int delayDelete = 5000;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -84,6 +84,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         binding = ActivityMapsBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
+
+        handler = new Handler();
+        bears = new ArrayList<>();
+        reportedSighting = new ArrayList<>();
 
         SearchView searchView = findViewById(R.id.searchView);
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
@@ -116,10 +120,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             }
         });
 
-        handler = new Handler();
-        bears = new ArrayList<>();
-        reportedSighting = new ArrayList<>();
-
         ImageButton imageButton = findViewById(R.id.button_Alert);
         imageButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -139,6 +139,17 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         bearReported = false;
 
         database = FirebaseDatabase.getInstance("https://beartrackingapp-9f7a3-default-rtdb.europe-west1.firebasedatabase.app/");
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            if (!foregroundServiceRunning()) {
+                Intent serviceIntent = new Intent(this,
+                        MyForegroundService.class);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(serviceIntent);
+                }
+            }
+        }
+
         mapFragment.getMapAsync(this);
     }
 
@@ -180,20 +191,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         LocationManager locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
             return;
         }
         Location userLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
 
         executor.execute(() -> {
             try {
-                URL serverURL = new URL("http://192.168.0.31:3000/bears");
+                URL serverURL = new URL("http://192.168.0.87:3000/bears");
                 HttpURLConnection httpURLConnection = (HttpURLConnection) serverURL.openConnection();
                 InputStream inputStream = httpURLConnection.getInputStream();
                 BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
@@ -217,7 +221,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
                     Boolean shouldAdd = true;
                     if (bears.contains(bear)) {
-
                     }
                     for (Bear bearIndex : bears) {
                         if (bearIndex.getCode() == bear.getCode()) {
@@ -246,13 +249,14 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                             float[] distance = new float[1];
                             Location.distanceBetween(userLocation.getLatitude(), userLocation.getLongitude(), bear.getLatitude(), bear.getLongitude(), distance);
 
-                            // Do something with the distance
-                            Toast.makeText(MapsActivity.this, "Distance:" + distance[0], Toast.LENGTH_SHORT).show();
                             if (distance[0] < 200) {
-//                                Toast.makeText(MapsActivity.this, "ALERT!", Toast.LENGTH_SHORT).show();
+                                AlertDialog.Builder builder = new AlertDialog.Builder(MapsActivity.this);
+                                builder.setTitle("ALERT");
+                                builder.setMessage("BEAR NEAR YOU!");
+                                AlertDialog alertDialog = builder.create();
+                                alertDialog.show();
                             }
 
-                            // Remove the circle after x minutes
                             new Handler().postDelayed(new Runnable() {
                                 @Override
                                 public void run() {
@@ -352,4 +356,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             bearReported = true;
         }
     }
+
+    public boolean foregroundServiceRunning() {
+        ActivityManager activityManager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        for (ActivityManager.RunningServiceInfo service : activityManager.getRunningServices(Integer.MAX_VALUE)) {
+            if (MyForegroundService.class.getName().equals(service.service.getClassName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
 }

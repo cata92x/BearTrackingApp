@@ -53,6 +53,7 @@ public class MainActivity extends AppCompatActivity {
 //            }
 //        }
     }
+
     private void checkPermission() {
         Dexter.withContext(this).withPermission(Manifest.permission.ACCESS_FINE_LOCATION).withListener(new PermissionListener() {
             @Override

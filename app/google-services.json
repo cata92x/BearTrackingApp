@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "595882827567",
+    "project_id": "beartrackingapp-9f7a3",
+    "storage_bucket": "beartrackingapp-9f7a3.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:595882827567:android:11dd87a08adcb37cff0bda",
+        "android_client_info": {
+          "package_name": "com.finaldegree.beartrackingapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "595882827567-q2hl0if76jlcur06p54tacee7h5g7qav.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDcDJTUimlP7YVO5C9R0hds3GyYNMeUiXY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "595882827567-q2hl0if76jlcur06p54tacee7h5g7qav.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
