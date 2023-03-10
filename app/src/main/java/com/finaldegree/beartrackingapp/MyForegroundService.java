@@ -94,17 +94,11 @@ public class MyForegroundService extends Service {
                                                 break;
                                             }
                                         }
-                                        if (shouldAdd == true) {
+                                        if (shouldAdd) {
                                             bears.add(bear);
                                         }
                                     }
-                                } catch (MalformedURLException e) {
-                                    e.printStackTrace();
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                } catch (JSONException e) {
-                                    e.printStackTrace();
-                                } catch (ParseException e) {
+                                } catch (IOException | JSONException | ParseException e) {
                                     e.printStackTrace();
                                 }
                             });
@@ -148,12 +142,11 @@ public class MyForegroundService extends Service {
 
                                                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                                                     notification = new Notification.Builder(getApplicationContext(), CHANNELID)
-                                                            .setSmallIcon(R.drawable.alert)
+                                                            .setSmallIcon(R.mipmap.danger)
                                                             .setContentText("There is a bear nerby!")
                                                             .setContentTitle("Alert!")
                                                             .setAutoCancel(true)
                                                             .setPriority(Notification.PRIORITY_MAX)
-                                                            .setWhen(System.currentTimeMillis())
                                                             .setContentIntent(pendingIntent);
                                                 }
 
@@ -207,7 +200,7 @@ public class MyForegroundService extends Service {
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             notification = new Notification.Builder(getApplicationContext(), CHANNELID)
-                    .setSmallIcon(R.drawable.bear)
+                    .setSmallIcon(R.mipmap.ic_launcher_foreground)
                     .setContentText("The Bear Tracking App is using your location")
                     .setContentTitle("Bear Tracking App")
                     .setContentIntent(pendingIntent);

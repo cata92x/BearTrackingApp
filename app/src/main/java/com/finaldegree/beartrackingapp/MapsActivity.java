@@ -3,26 +3,27 @@ package com.finaldegree.beartrackingapp;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.ActivityManager;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.provider.Settings;
 import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
@@ -30,14 +31,18 @@ import android.widget.Toast;
 
 import androidx.appcompat.widget.SearchView;
 
+import com.finaldegree.beartrackingapp.databinding.ActivityMapsBinding;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptor;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.Circle;
 import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
-import com.finaldegree.beartrackingapp.databinding.ActivityMapsBinding;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
@@ -47,6 +52,7 @@ import com.google.firebase.database.ValueEventListener;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.xmlpull.v1.XmlPullParserException;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -62,6 +68,12 @@ import java.util.Date;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+
+import io.ticofab.androidgpxparser.parser.GPXParser;
+import io.ticofab.androidgpxparser.parser.domain.Gpx;
+import io.ticofab.androidgpxparser.parser.domain.Track;
+import io.ticofab.androidgpxparser.parser.domain.TrackPoint;
+import io.ticofab.androidgpxparser.parser.domain.TrackSegment;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
     private ActivityMapsBinding binding;
@@ -165,6 +177,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
         LatLng Ulmi = new LatLng(44.487252, 25.781897);
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(Ulmi, 18));
+
+        readFromGPX();
     }
 
     @Override
@@ -184,6 +198,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         handler.removeCallbacks(runnable); //stop handler when activity not visible super.onPause();
         super.onPause();
     }
+
 
     private void retrieveBearCoordinates() {
         Executor executor = Executors.newSingleThreadExecutor();
@@ -239,12 +254,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     public void run() {
                         for (Bear bear : bears) {
                             LatLng bearLocation = new LatLng(bear.getLatitude(), bear.getLongitude());
-                            Circle circle = mMap.addCircle(new CircleOptions()
-                                    .center(bearLocation)
-                                    .radius(5) // in meters
-                                    .strokeWidth(5)
-                                    .strokeColor(Color.RED)
-                                    .fillColor(Color.argb(50, 0, 0, 255)));
+                            drawCircle(bearLocation);
 
                             float[] distance = new float[1];
                             Location.distanceBetween(userLocation.getLatitude(), userLocation.getLongitude(), bear.getLatitude(), bear.getLongitude(), distance);
@@ -257,12 +267,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                 alertDialog.show();
                             }
 
-                            new Handler().postDelayed(new Runnable() {
-                                @Override
-                                public void run() {
-                                    circle.remove();
-                                }
-                            }, delayDelete);
+
                         }
                     }
                 });
@@ -291,20 +296,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     LatLng latLng = new LatLng(latitude, longitude);
 
                     if (!reportedSighting.contains(latLng)) {
-                        Circle circle = mMap.addCircle(new CircleOptions()
-                                .fillColor(Color.argb(50, 255, 0, 0))
-                                .radius(20)
-                                .center(latLng)
-                                .strokeWidth(2)
-                                .strokeColor(Color.rgb(255, 0, 0)));
                         reportedSighting.add(latLng);
-                        new Handler().postDelayed(new Runnable() {
-                            @Override
-                            public void run() {
-                                circle.remove();
-                                reportedSighting.remove(latLng);
-                            }
-                        }, delayDelete);
+                        drawCircle(latLng);
                     }
                 }
             }
@@ -367,4 +360,70 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         return false;
     }
 
+    public void readFromGPX() {
+        GPXParser parser = new GPXParser(); // consider injection
+        Gpx parsedGpx = null;
+        try {
+            InputStream in = getAssets().open("test2.gpx");
+            parsedGpx = parser.parse(in); // consider using a background thread
+        } catch (IOException | XmlPullParserException e) {
+            e.printStackTrace();
+        }
+        if (parsedGpx == null) {
+        } else {
+            List<Track> tracks = parsedGpx.getTracks();
+            for (int i = 0; i < tracks.size(); i++) {
+                Track track = tracks.get(i);
+                List<TrackSegment> segments = track.getTrackSegments();
+                for (int j = 0; j < segments.size(); j++) {
+                    TrackSegment segment = segments.get(j);
+
+                    List<TrackPoint> trackPoints = segment.getTrackPoints();
+
+                    Executor executor = Executors.newSingleThreadExecutor();
+                    executor.execute(new Runnable() {
+                        @Override
+                        public void run() {
+                            for (int i = 0; i < trackPoints.size(); i++) {
+                                LatLng bear = new LatLng(trackPoints.get(i).getLatitude(), trackPoints.get(i).getLongitude());
+                                handler.post(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        drawCircle(bear);
+                                    }
+                                });
+                                try {
+                                    Thread.sleep(delayRefresh);
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    }
+
+    private void drawCircle(LatLng location) {
+        Marker marker = mMap.addMarker(new MarkerOptions()
+                .position(location)
+                .icon(bitmapDescriptorFromVector(getApplicationContext(), R.drawable.bear_icon)));
+
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                marker.remove();
+            }
+        }, delayDelete);
+    }
+
+    private BitmapDescriptor bitmapDescriptorFromVector(Context context, int vectorResId) {
+        Drawable vectorDrawable = ContextCompat.getDrawable(context, vectorResId);
+        vectorDrawable.setBounds(0, 0, vectorDrawable.getIntrinsicWidth(), vectorDrawable.getIntrinsicHeight());
+        Bitmap bitmap = Bitmap.createBitmap(vectorDrawable.getIntrinsicWidth(), vectorDrawable.getMinimumHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        vectorDrawable.draw(canvas);
+        return BitmapDescriptorFactory.fromBitmap(bitmap);
+    }
 }

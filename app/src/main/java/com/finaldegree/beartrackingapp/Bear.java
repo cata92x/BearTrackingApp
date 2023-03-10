@@ -4,8 +4,8 @@ import java.util.Date;
 
 public class Bear {
     private int code;
-    private double latitude;
-    private double longitude;
+    private final double latitude;
+    private final double longitude;
     private Date lastUpdate;
 
     public Bear(int code, double latitude, double longitude, Date lastUpdate) {
